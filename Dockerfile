@@ -13,4 +13,4 @@ RUN pip install lxml
 
 
 
-CMD [ "python3", "./line_extract.py" ]
+CMD [ "python3", "./link_extract.py" ]

@@ -347,7 +347,7 @@ def fetch_data(variante):
     global variantes_photos_rows  # Variantes Photos Table
     global options_rows  # Options Table
     global options_product_rows  # Options Product Table
-    
+
     variants = get_variants(link)
     var_data = (get_variants_data(variants))
     product_details = (get_variants_details(var_data[0]))
@@ -422,7 +422,7 @@ def csv_tulple(filename):
     return dicts
 
 if __name__ == '__main__':
-    variants_rows = csv_tulple("/Users/mac/Downloads/DafyExtract/ExtractAllProducts/input/dafy_withlinks.csv")
+    variants_rows = csv_tulple("input/dafy_withlinks.csv")
     for variant_row in variants_rows:
         link = (variant_row["LIEN DAFY.COM"])
         if re.match(link_regex,link) is not None:

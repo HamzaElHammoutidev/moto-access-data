@@ -1,18 +1,28 @@
-# encoding : utf-8
+"""
+This module helps with extracting data from website link directly.
 
+"""
+import requests,re, json,sys,csv
 from bs4 import BeautifulSoup
-import requests,json,re,sys
-import logging,random,time
 from retrying import retry
-import db
+import pandas as pd
 
 main_website = "https://www.dafy-moto.com"
-variante_id = 5000
-produit_id = 5000
-variante_photo_id = 5000
+variante_id = 10000
+produit_id = 10000
+variante_photo_id = 10000
 principale_holder = False
-option_id = 5000
-option_produit_id = 5000
+option_id = 10000
+option_produit_id = 10000
+
+
+link_regex = re.compile(
+        r'^(?:http|ftp)s?://' # http:// or https://
+        r'(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+(?:[A-Z]{2,6}\.?|[A-Z0-9-]{2,}\.?)|' #domain...
+        r'localhost|' #localhost...
+        r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})' # ...or ip
+        r'(?::\d+)?' # optional port
+        r'(?:/?|[/?]\S+)$', re.IGNORECASE)
 
 ##----Tables----##
 product_rows = []
@@ -31,105 +41,63 @@ def progress(count, total, suffix=''):
     sys.stdout.write('[%s] %s%s ...%s\r' % (bar, percents, '%', suffix))
     sys.stdout.flush()  # As suggested by Rom Ruben
 
+
 def wait(attempts, delay):
     print('Attempt #%d, retrying in %d seconds' % (attempts, delay // 1000))
     return delay
+
 
 def retry_if_request_error(exception):
     """Return True if we should retry (in this case when it's an IOError), False otherwise"""
     return isinstance(exception, requests.exceptions.RequestException)
 
 @retry(wait_random_min=5, wait_random_max=10,wait_func=wait,retry_on_exception=retry_if_request_error)
-def get_categories(url):
+def get_variant_details(pse_id):
     """
-    Gets back all website categories.
+    This function retrieves variante details using a PSE ID.
 
-    :param url: website master page link.
-    :return: list of categories links.
+    :param pse_id: variante PSE ID .
+    :return: Variante Details Dictionary.
     """
-    for i in range(0,5):
-        try:
-            page = requests.get(url)
-            soup = BeautifulSoup(page.text,"html.parser")
-            print('Created %s object' % type(soup))
-            urls = [element.text for element in soup.findAll('loc')]
-            return urls
-        except Exception as e:
-            logging.error(e)
-    else:
-        return 1
+    url = "https://www.dafy-moto.com/ajax/product_change_attribute_1"
+    data = {"pse_id":pse_id}
+    req = requests.post(url,data)
+    if req.status_code == 200:
+        return req.json()
 
-def variante_table(variante):
-    """
-    Gets back Variante Row.
-
-    :param vairiante: Variante to Model
-    :return: Product Variante Table Row in JSON.
-    """
-    couleur = variante["attribute1"]
-    try:
-        taille = variante["attribute2"]["title"].replace("(Indisponible dans ce coloris)","").strip()
-    except Exception as e:
-        taille = ""
-    quantite = 0
-    prix_vente = 0
-    prix_promo = 0
-    created_at = ""
-    updated_at = ""
-    ref = ""
-    return {
-        "id": variante["variante_id"],
-        "produit_id": variante["produit_id"],
-        "couleur" : couleur["title"],
-        "taille":taille,
-        "quantite": quantite,
-        "qualite": "",
-        "prix_vente": prix_vente,
-        "prix_promo": prix_promo,
-        "created_at": created_at,
-        "updated_at": updated_at,
-        "ref":ref
-    }
-
-def check_option_row(option,options_list):
-    """
-    Get back Option id if it exists on Option table.
-
-    :param option: Option row to check.
-    :param options_list: Options list to check into.
-    :return: Id if exsits on List.
-    """
-    for opt in options_list:
-        if opt["name"] == option[0] and option[1] == opt["valeur"]:
-            return opt
-    return False
-
-def variante_photo_table(variante,principale_holder):
-    """
-    Gets back Variante Photo Row.
-
-    :param variante: Product Variante to Model.
-    :return: Product Variante Photo Model Row in JSON Format.
-    """
-    couleur = variante["attribute1"]["title"]
-    try:
-        photo = variante["attribute1"]["url"]
-    except Exception as e:
-        photo = ""
-    created_at = ""
-    updated_at = ""
-    return {
-        "id": variante["variante_photo_id"],
-        "produit_id" : variante["produit_id"],
-        "couleur": couleur,
-        "photo":photo,
-        "principale" : principale_holder,
-        "created_at" : created_at,
-        "updated_at": updated_at
-    }
 
 @retry(wait_random_min=5, wait_random_max=10,wait_func=wait,retry_on_exception=retry_if_request_error)
-def GetVarianteDetails(variante):
+def get_variants_data(pses):
+    """
+    This function retrieves Variant Data using PSE ID  from Variante LINK.
+
+    :param url: Variante Link.
+    :return: Variante Data.
+    """
+
+    variantes_list = []
+    for pse in pses:
+        variantes = get_variant_details(pse["pseId"])["countryPseCollection"]
+        for variante in variantes:
+            variantes_list.append(variante)
+    return variantes_list
+
+@retry(wait_random_min=5, wait_random_max=10,wait_func=wait,stop_max_attempt_number=4)
+def get_variants(link):
+    """
+    This function retrieves variant PSE ID.
+
+    :param link: Variant Link.
+    :return: Variant PSE ID.
+    """
+    req = requests.get(link)
+    soup = BeautifulSoup(req.text, "lxml")
+    match = (re.search('var countryPseCollection = (.*?)];',str(soup)).group(1))
+    json_data = (json.loads(match+"]"))
+    return json_data
+
+#@retry(wait_random_min=5, wait_random_max=10,wait_func=wait,retry_on_exception=retry_if_request_error)
+def get_variants_details(variante):
     req = requests.get(main_website+variante["url"])
     soup = BeautifulSoup(req.text, "lxml")
 
@@ -197,6 +165,7 @@ def get_marqueId(name):
             return marque["id"]
     return 195
 
+
 def get_categoriesId(category_link):
     """
     Gets back category Id from categories list.
@@ -209,6 +178,7 @@ def get_categoriesId(category_link):
         if categorie["link"].strip() == category_link.strip():
             return categorie["id"]
     return 326
+
 
 def produit_table(produit):
     """
@@ -239,26 +209,6 @@ def produit_table(produit):
         "visibilite":visibilite
     }
 
-def produit_option(options,produit_id):
-    """
-    Gets back Product Options Table Row.
-
-    :param produit: Product to fetch options from.
-    :return: Product Option Row.
-    """
-    global option_produit_id
-    options_produit_list = []
-    for option in options:
-        id = option_produit_id
-        produit_id = produit_id
-        option_id = option["id"]
-        options_produit_list.append({
-            "id" : id,
-            "produit_id": produit_id,
-            "option_id": option_id,
-        })
-        option_produit_id += 1
-    return options_produit_list
 
 def option_table(produit):
     """
@@ -291,62 +241,129 @@ def option_table(produit):
             options_list.append(opt)
     return options_list
 
-@retry(wait_random_min=5, wait_random_max=10,wait_func=wait,retry_on_exception=retry_if_request_error)
-def getVarianteDetails(pse_id):
-    url = "https://www.dafy-moto.com/ajax/product_change_attribute_1"
-    data = {"pse_id":pse_id}
-    req = requests.post(url,data)
-    if req.status_code == 200:
-        return req.json()
 
-@retry(wait_random_min=5, wait_random_max=10,wait_func=wait,retry_on_exception=retry_if_request_error)
-def getVariantesPSEs(url):
-    variantes_list = []
-    req = requests.get(url)
-    soup = BeautifulSoup(req.text, "lxml")
-    pses = soup.findAll(
-                lambda tag:tag.name == "label" and
-                "data-js-pse-id" in (tag.attrs) )
-
-    for pse in pses:
-        variantes = getVarianteDetails(pse["data-js-pse-id"])["countryPseCollection"]
-        for variante in variantes:
-            variantes_list.append(variante)
-    return variantes_list
-
-@retry(wait_random_min=5, wait_random_max=10,wait_func=wait,retry_on_exception=retry_if_request_error)
-def GetVariantes(link):
+def check_option_row(option,options_list):
     """
-    Gets back product information, variantes & variantes photo.
+    Get back Option id if it exists on Option table.
 
-    :param link: Product Link.
-    :return: Product Information, Options, Variantes & Variantes Photos.
+    :param option: Option row to check.
+    :param options_list: Options list to check into.
+    :return: Id if exsits on List.
+    """
+    for opt in options_list:
+        if opt["name"] == option[0] and option[1] == opt["valeur"]:
+            return opt
+    return False
+
+def produit_option(options,produit_id):
+    """
+    Gets back Product Options Table Row.
+
+    :param produit: Product to fetch options from.
+    :return: Product Option Row.
+    """
+    global option_produit_id
+    options_produit_list = []
+    for option in options:
+        id = option_produit_id
+        produit_id = produit_id
+        option_id = option["id"]
+        options_produit_list.append({
+            "id" : id,
+            "produit_id": produit_id,
+            "option_id": option_id,
+        })
+        option_produit_id += 1
+    return options_produit_list
+
+def variante_table(variante):
+    """
+    Gets back Variante Row.
+
+    :param vairiante: Variante to Model
+    :return: Product Variante Table Row in JSON.
+    """
+    couleur = variante["attribute1"]
+    try:
+        taille = variante["attribute2"]["title"].replace("(Indisponible dans ce coloris)","").strip()
+    except Exception as e:
+        taille = ""
+    quantite = 0
+    prix_vente = 0
+    prix_promo = 0
+    created_at = ""
+    updated_at = ""
+    ref = ""
+    return {
+        "id": variante["variante_id"],
+        "produit_id": variante["produit_id"],
+        "couleur" : couleur["title"],
+        "taille":taille,
+        "quantite": quantite,
+        "qualite": "",
+        "prix_vente": prix_vente,
+        "prix_promo": prix_promo,
+        "created_at": created_at,
+        "updated_at": updated_at,
+        "ref":ref
+    }
+
+def variante_photo_table(variante,principale_holder):
+    """
+    Gets back Variante Photo Row.
+
+    :param variante: Product Variante to Model.
+    :return: Product Variante Photo Model Row in JSON Format.
+    """
+    couleur = variante["attribute1"]["title"]
+    try:
+        photo = variante["attribute1"]["url"]
+    except Exception as e:
+        photo = ""
+    created_at = ""
+    updated_at = ""
+    return {
+        "id": variante["variante_photo_id"],
+        "produit_id" : variante["produit_id"],
+        "couleur": couleur,
+        "photo":photo,
+        "principale" : principale_holder,
+        "created_at" : created_at,
+        "updated_at": updated_at
+    }
+
+def fetch_data(variante):
+    """
+    This function retrieves all data required for a variante and put in different tables associated to our Db Model.
+
+    :param variante: Variante url.
+    :return: None.
     """
     global variante_id
     global produit_id
     global variante_photo_id
-    global product_rows # Product Table
+    global product_rows  # Product Table
     global variantes_rows  # Variantes Table
-    global variantes_photos_rows # Variantes Photos Table
-    global options_rows # Options Table
+    global variantes_photos_rows  # Variantes Photos Table
+    global options_rows  # Options Table
     global options_product_rows  # Options Product Table
-    variantes  = []
-    req = requests.get(link)
-    soup = BeautifulSoup(req.text, "lxml")
-    json_data = (getVariantesPSEs(link))
-
-    product_details = (GetVarianteDetails(json_data[0]))
-    product_details["title"] = link.replace("https://www.dafy-moto.com/","").replace(".html","").replace("-"," ").title()
+    
+    variants = get_variants(link)
+    var_data = (get_variants_data(variants))
+    product_details = (get_variants_details(var_data[0]))
+    product_details["title"] = link.replace("https://www.dafy-moto.com/", "").replace(".html", "").replace("-",
+                                                                                                           " ").title()
     product_row = (produit_table(product_details))
     product_rows.append(product_row)
     options = option_table(product_details)
     [options_rows.append(option) for option in options]
-    options_produit = produit_option(options,produit_id)
+    options_produit = produit_option(options, produit_id)
     [options_product_rows.append(option_product) for option_product in options_produit]
     list_varaintes = []
     list_variantes_photos = []
+
     couleur = ""
-    for variante in json_data:
+    for variante in var_data: # Tailles of variante
         if variante["attribute1"]["title"] != couleur:
             principale_holder = 1
         else:
@@ -355,7 +372,7 @@ def GetVariantes(link):
         variante["produit_id"] = produit_id
         list_varaintes.append(variante_table(variante))
         variante["variante_photo_id"] = variante_photo_id
-        list_variantes_photos.append(variante_photo_table(variante,principale_holder))
+        list_variantes_photos.append(variante_photo_table(variante, principale_holder))
         couleur = variante["attribute1"]["title"]
         variante_id += 1
         variante_photo_id += 1
@@ -373,9 +390,8 @@ def GetVariantes(link):
     print(json.dumps(list_variantes_photos))
     print("--------------")
 
-
     produit_id += 1
-    return json_data
+    return var_data
 
 def save_data_json(data,file_name):
     """
@@ -388,23 +404,36 @@ def save_data_json(data,file_name):
     with open("data/{}.json".format(file_name), "w", encoding="utf-8") as jsonfile:
         json.dump(data, jsonfile, ensure_ascii=False)
 
+
+def csv_tulple(filename):
+    import pandas as pd
+
+    # Read the CSV into a pandas data frame (df)
+    #   With a df you can do many things
+    #   most important: visualize data with Seaborn
+    df = pd.read_csv(filename, delimiter=',')
+
+    # Or export it in many ways, e.g. a list of tuples
+    tuples = [tuple(x) for x in df.values]
+
+    # or export it as a list of dicts
+    dicts = df.to_dict('records')
+
+    return dicts
+
 if __name__ == '__main__':
-    db.connect()
-    time.sleep(1000)
-    urls = (get_categories("https://www.dafy-moto.com/sitemap-produits.xml"))
-    l = len(urls)
-    i = 0
-    for url in urls:
-        try:
-            (GetVariantes(url))
-        except IndexError as indexError:
-            continue
-        except Exception as e:
-            logging.error(e)
-        logging.warning("{}%".format(str(i)))
-        i += 1
-    save_data_json(product_rows,"products")
-    save_data_json(variantes_rows,"variantes")
-    save_data_json(variantes_photos_rows,"variantes_photos")
-    save_data_json(options_rows,"options")
-    save_data_json(options_product_rows,"options_products")
+    variants_rows = csv_tulple("/Users/mac/Downloads/DafyExtract/ExtractAllProducts/input/dafy_withlinks.csv")
+    for variant_row in variants_rows:
+        link = (variant_row["LIEN DAFY.COM"])
+        if re.match(link_regex,link) is not None:
+            try:
+                fetch_data(link)
+            except Exception as e:
+                print(e)
+    save_data_json(product_rows, "products")
+    save_data_json(variantes_rows, "variantes")
+    save_data_json(variantes_photos_rows, "variantes_photos")
+    save_data_json(options_rows, "options")
+    save_data_json(options_product_rows, "options_products")
+
+

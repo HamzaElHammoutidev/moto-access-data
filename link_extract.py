@@ -276,24 +276,28 @@ def produit_option(options,produit_id):
         option_produit_id += 1
     return options_produit_list
 
-def variante_table(variante):
+def variante_table(variante,file_variant):
     """
-    Gets back Variante Row.
+    Gets back Variant Row.
 
     :param vairiante: Variante to Model
     :return: Product Variante Table Row in JSON.
     """
+    print(variante)
     couleur = variante["attribute1"]
     try:
         taille = variante["attribute2"]["title"].replace("(Indisponible dans ce coloris)","").strip()
     except Exception as e:
         taille = ""
-    quantite = 0
-    prix_vente = 0
+    quantite = file_variant["Dispo"]
+    try:
+        prix_vente = float(file_variant["Prix T.T.C."].replace("Dh","").strip())
+    except :
+        prix_vente = 0
     prix_promo = 0
     created_at = ""
     updated_at = ""
-    ref = ""
+    ref = file_variant["Code barre"]
     return {
         "id": variante["variante_id"],
         "produit_id": variante["produit_id"],
@@ -310,7 +314,7 @@ def variante_table(variante):
 
 def variante_photo_table(variante,principale_holder):
     """
-    Gets back Variante Photo Row.
+    Gets back Variant Photo Row.
 
     :param variante: Product Variante to Model.
     :return: Product Variante Photo Model Row in JSON Format.
@@ -332,7 +336,7 @@ def variante_photo_table(variante,principale_holder):
         "updated_at": updated_at
     }
 
-def fetch_data(variante):
+def fetch_data(link,file_variant):
     """
     This function retrieves all data required for a variante and put in different tables associated to our Db Model.
 
@@ -370,7 +374,7 @@ def fetch_data(variante):
             principale_holder = 0
         variante["variante_id"] = variante_id
         variante["produit_id"] = produit_id
-        list_varaintes.append(variante_table(variante))
+        list_varaintes.append(variante_table(variante,file_variant))
         variante["variante_photo_id"] = variante_photo_id
         list_variantes_photos.append(variante_photo_table(variante, principale_holder))
         couleur = variante["attribute1"]["title"]
@@ -427,7 +431,7 @@ if __name__ == '__main__':
         link = (variant_row["LIEN DAFY.COM"])
         if re.match(link_regex,link) is not None:
             try:
-                fetch_data(link)
+                fetch_data(link,variant_row)
             except Exception as e:
                 print(e)
     save_data_json(product_rows, "products")

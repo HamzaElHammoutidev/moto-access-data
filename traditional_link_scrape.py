@@ -43,6 +43,7 @@ def get_page_content(url):
     :return: Variante Page Content.
     """
     req = requests.get(url)
+    print(req.status_code)
     soup = BeautifulSoup(req.text, "lxml")
     return soup
 

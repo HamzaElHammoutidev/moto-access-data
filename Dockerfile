@@ -14,4 +14,4 @@ RUN pip install pandas
 
 
 
-CMD [ "python3", "./ChaftExtract.py" ]
+CMD [ "python3", "./traditional_link_scrape.py" ]

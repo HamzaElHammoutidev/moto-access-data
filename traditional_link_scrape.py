@@ -327,7 +327,7 @@ def fetch_photo(photo):
     try:
         DownloadImage(photo.replace("/small/","/high/"))
     except Exception as e:
-        print(photo["photo"], e)
+        print( e)
     return photo.replace("https://www.dafy-moto.com/images/product/small/","produit_variante_photos/Tester/")
 
 def variante_photo_table(variante):

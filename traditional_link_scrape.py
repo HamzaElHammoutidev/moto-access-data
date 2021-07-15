@@ -396,7 +396,7 @@ if __name__ == '__main__':
         #    break
         link = (variant_row["LIEN DAFY.COM"])
         if re.match(link_regex, link) is not None:
-            #try:
+            try:
                 soup = get_page_content(link)
                 variante_data = fetch_product(soup,link)
                 product = produit_table(variante_data)
@@ -440,8 +440,8 @@ if __name__ == '__main__':
                             print("Variantes Produits Photos: {}".format(json.dumps(variantes_photos_rows)))
                             print("----------------------------------------")
                 """
-            #except Exception as e:
-            #    logging.error(e)
+            except Exception as e:
+                logging.error(e)
     variantes_rows = remove_duplicates(variantes_rows, ["produit_id", "couleur", "taille"])
     product_rows = remove_duplicates(product_rows, "name")
     options_product_rows = remove_duplicates(options_product_rows, ["produit_id", "option_id"])

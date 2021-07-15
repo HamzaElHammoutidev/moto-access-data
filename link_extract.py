@@ -7,6 +7,8 @@ from bs4 import BeautifulSoup
 from retrying import retry
 import pandas as pd
 
+
+
 main_website = "https://www.dafy-moto.com"
 variante_id = 10000
 produit_id = 10000
@@ -424,6 +426,9 @@ def csv_tulple(filename):
     dicts = df.to_dict('records')
 
     return dicts
+
+
+
 
 if __name__ == '__main__':
     variants_rows = csv_tulple("input/dafy_withlinks.csv")
